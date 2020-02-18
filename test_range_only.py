@@ -86,7 +86,7 @@ for j in range(MC):
     print("")
     Xt_hat = rof.apckf(Xo,Z,theta_min,theta_max,sigma_r,T,N,vel_std,num_trk,q_tild)
 
-    # rof.plot_results(Xt, Xo)
+    rof.plot_results(Xt, Xo, Xt_hat)
 
     # # calc rms position error
     # Xterr = Xthat - Xt

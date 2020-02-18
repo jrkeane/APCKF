@@ -181,8 +181,8 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
     N = Z.shape[1]  # length of Z
     xfs = np.empty((4, N))  # create estimated target states array
     Pfs = np.empty((4, 4, N))  # create corresponding covariance matrices array
-    xfs[:, 1] = xfm  # All estimated target states are stored here
-    Pfs[:, :, 1] = Pfiltm  # These are the corresponding covariance matrices
+    xfs[:, 0] = xfm  # All estimated target states are stored here
+    Pfs[:, :, 0] = Pfiltm  # These are the corresponding covariance matrices
     r = pow(sigma_r, 2)  # measurement variance
     A = np.array([[1, 0, T, 0],  # this is the state transition matrix
                   [0, 1, 0, T],
@@ -212,43 +212,42 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
              check var going in. All good! 
             '''
             xtf, Pfilt, likeli = ckf_ro_onestep(Xthat_curr,P_curr,Xo_curr,Z_curr,sigma_r,T,Q)
-            print(xtf)
+            # xtransition = np.array(xtf)
+            # tt = xf_all[:,t]
+            xf_all[0,t] = xtf[0]  # not pythonic
+            xf_all[1,t] = xtf[1]  # not pythonic
+            xf_all[2,t] = xtf[2]  # not pythonic
+            xf_all[3,t] = xtf[3]  # not pythonic
+            # xf_all[:,t] = xtf
+            P_all[:,:,t] = Pfilt
+            wt[t] = wt[t] * likeli
+            wt_sum = wt_sum+wt[t]
 
-            print(""
-                  
-                  
-                  
-                  
-                  "DEBUGGING FROM HERE: "
-                  
-                  
-                  
-                  
-                  
-                  "")
+        xfm = np.zeros((4))  # xfm will contain the overall state estimate     # xfm translated okay.
+        Pfiltm = np.zeros((4, 4))  # Pfiltm the corresponding covariance matrix
 
-    #         xf_all[:,t] = xtf
-    #         P_all[:,:,t] = Pfilt
-    #         wt[t] = wt[t] * likeli
-    #         wt_sum = wt_sum+wt[t]
+        for jj in range(num_trk):
+            wt[jj] = wt[jj]/wt_sum
+            if wt[jj] < 0.001:
+                wt[jj] = 0
+
+            xfm = xfm+wt[jj]*xf_all[:,jj]
+            Pfiltm = Pfiltm + wt[jj] * P_all[:,:,jj] + wt[jj] * xf_all[:,jj]*np.transpose(xf_all[:,jj])
+
+
+        xf_transpose = xfm.reshape(-1, 1)
+        Pfiltm = Pfiltm - xfm * xf_transpose
+        xfs[:,i] = xfm
+        Pfs[:,:,i] = Pfiltm
+
+    Xt_hat = xfs
+
+    # print(""
     #
-    #     xfm = np.zeros((4,1))
-    #     Pfiltm = np.zeros((4,4))
+    #       "DEBUGGING FROM HERE: "
     #
-    #     for jj in num_trk:
-    #         wt[jj] = wt[jj]/wt_sum
-    #         if wt[jj] < 0.001:
-    #             wt[jj] = 0
-    #
-    #         xfm = xfm+wt[jj]*xf_all[:,jj]
-    #         Pfiltm = Pfiltm + wt[jj] * P_all[:,:,jj] + wt[jj] * xf_all[:,jj]*np.transpose(xf_all[:,jj])
-    #
-    #     xf_transpose = xfm.reshape(-1, 1)
-    #     Pfiltm = Pfiltm - xfm * xf_transpose
-    #     xfs[:,i] = xfm
-    #     Pfs[:,:,i] = Pfiltm
-    #
-    # Xt_hat = xfs
+    #       "")
+
 
     return Xt_hat
 
@@ -302,7 +301,9 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
         # % Organisation: DST, Australia
     '''
 
-    print("Function for CKF_ro_onestep for each iteration")
+    '''
+    Function for CKF_ro_onestep for each iteration
+    '''
     r = pow(sigma_r, 2)
     A = np.array([[1, 0, T, 0],  # this is the state transition matrix
                   [0, 1, 0, T],
@@ -360,10 +361,10 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
         zp_nu_t = np.transpose(zp_nu)
         second = np.multiply(first, zp_nu_t)
         Pxz = Pxz + second
-        print(Pxz)
+        # print(Pxz)
         # pz_f = wts[j] * zp_nu
         Pzz = Pzz + wts[j] * zp_nu * np.transpose(zp_nu)
-        print(Pzz)
+        # print(Pzz)
 
     Pzz = Pzz + r
     # he = np.reciprocal(Pzz)
@@ -387,7 +388,7 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
     return xtf, Phat, likeli
 
 
-def plot_results(Xo, Xt):
+def plot_results(Xo, Xt, Xt_hat):
     # for figure
     fig, axs = plt.subplots(1, constrained_layout=True)
     fig.canvas.set_window_title('Holthouse')
@@ -409,13 +410,13 @@ def plot_results(Xo, Xt):
     ownship_y = Xo[1, :]
 
     # # plot acpkf estimates
-    # print(Xt_hat.shape)
-    # track_x = Xt_hat[0,:]
-    # track_y = Xt_hat[1,:]
+    print(Xt_hat.shape)
+    track_x = Xt_hat[0,:]
+    track_y = Xt_hat[1,:]
 
     axs.plot(target_x, target_y, linestyle='solid', label='target', c='r')
     axs.plot(ownship_x, ownship_y, linestyle='solid', label='ownship', c='g')
-    # axs.plot(track_x,track_y, linestyle='solid', label='Estimated Track (APCKF)', c='b')
+    axs.plot(track_x,track_y, linestyle='solid', label='Estimated Track (APCKF)', c='b')
     axs.legend(loc='upper right')
     axs.axis([-400, 200, -400, 200])
     axs.set_aspect('equal')
