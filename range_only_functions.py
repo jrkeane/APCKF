@@ -64,6 +64,34 @@ def load_ro_scen_data():
     return Xo, Xt
 
 
+def gen_meas_range_only(N, sigma_r, Xt, Xo):
+    '''
+    Sanjeev's comments:
+    file description: This generates the range - only measurements
+    Given Xo, and Xt, generates a vector Z of measurements;
+    Author: Dr Sanjeev Arulampalam
+    Organisation: DST Group Edinburgh
+    Date: 5 Jan 2020
+    '''
+
+    Z = np.zeros(N)  # initialise array Z for range only (with noise)
+
+    r_x = Xt[0, :] - Xo[0, :]
+    r_y = Xt[1, :] - Xo[1, :]
+    r_diff_sq = np.square(r_x) + np.square(r_y)
+    range_true = sqrt(r_diff_sq)  # c^2 = a^2 + b^2, c = sqrt(a^2 + b^2)
+
+    print("array range_true")
+    print(range_true)
+
+    range_noise = np.random.rand(1, N)
+    print("generate noise")
+    range_noise = range_noise * sigma_r
+    Z = range_true + range_noise  # add noise to true ranges
+    print("generate Z")
+
+    return Z
+
 def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
 
     '''
@@ -114,10 +142,6 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
     R_var = pow(sigma_r, 2)
     vel_var = pow(vel_std, 2)
 
-    '''
-    translated up to here 17 01 20. All compares well to matlab so far 
-    '''
-
     # The following 'for loop' initialises the covariance matrices for each of
     # the num_trk filters
     print("Now run the loop to initialise covariance matrices for each of the num_trk filters")
@@ -134,9 +158,6 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
         sig_y2 = sigma_r2 * cos_bet2 + R02 * sigma_bet2 * sin_bet2
         sig_x2 = sigma_r2 * sin_bet2 + R02 * sigma_bet2 * cos_bet2
         sig_xy = ((sigma_r2) - (R02) * sigma_bet2) * np.sin(bet) * np.cos(bet)
-
-        # we want a 4 x 4 x num_trk matrix  i.e np.array([PP, np.zeros(2,2)],
-        #                                               [np.zeros(2,2), vel_var*np.eye(2)]])
 
         PP = np.array([[sig_x2, sig_xy],  # whatever PP stands for... these variable names are killing me
                        [sig_xy, sig_y2]])
@@ -195,10 +216,8 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
     '''
     print("Run APCKF for rest of measurements, til N. Measurement array shape is:")
     for i in range(1, N):  # where N is total number of measurements available
-        # print(i)
         wt_sum = 0
         Xo_curr = Xo[:, i]
-        # print(Xo_curr.shape)
         Z_curr = Z[0, i]
         for t in range(num_trk): # where num_trk is Number of filters used in (AP-CKF)
             Xthat_curr = xf_all[:, t]
@@ -206,19 +225,11 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
             # Now execute the cubature Kalman filter with range-only measurement
             # for the current measurement, given the current state and covariance
             # of the t-th filter
-
-            '''
-             got stuck here at ckf ro onestep.
-             check var going in. All good! 
-            '''
             xtf, Pfilt, likeli = ckf_ro_onestep(Xthat_curr,P_curr,Xo_curr,Z_curr,sigma_r,T,Q)
-            # xtransition = np.array(xtf)
-            # tt = xf_all[:,t]
             xf_all[0,t] = xtf[0]  # not pythonic
             xf_all[1,t] = xtf[1]  # not pythonic
             xf_all[2,t] = xtf[2]  # not pythonic
             xf_all[3,t] = xtf[3]  # not pythonic
-            # xf_all[:,t] = xtf
             P_all[:,:,t] = Pfilt
             wt[t] = wt[t] * likeli
             wt_sum = wt_sum+wt[t]
@@ -234,62 +245,19 @@ def apckf(Xo, Z, theta_min, theta_max, sigma_r, T, N, vel_std, num_trk, q_tild):
             xfm = xfm+wt[jj]*xf_all[:,jj]
             Pfiltm = Pfiltm + wt[jj] * P_all[:,:,jj] + wt[jj] * xf_all[:,jj]*np.transpose(xf_all[:,jj])
 
-
         xf_transpose = xfm.reshape(-1, 1)
         Pfiltm = Pfiltm - xfm * xf_transpose
         xfs[:,i] = xfm
         Pfs[:,:,i] = Pfiltm
+        # plot_iter(xfs)
 
     Xt_hat = xfs
 
-    # print(""
-    #
-    #       "DEBUGGING FROM HERE: "
-    #
-    #       "")
 
 
     return Xt_hat
 
 
-def gen_meas_range_only(N, sigma_r, Xt, Xo):
-    '''
-    Sanjeev's comments:
-    file description: This generates the range - only measurements
-    Given Xo, and Xt, generates a vector Z of measurements;
-    Author: Dr Sanjeev Arulampalam
-    Organisation: DST Group Edinburgh
-    Date: 5 Jan 2020
-    '''
-
-    Z = np.zeros(N)  # initialise array Z for range only (with noise)
-
-    # xrel = Xt - Xo  # get the difference between target state and ownship state
-    r_x = Xt[0, :] - Xo[0, :]
-    # print(r_x)
-    # print(r_x.shape)
-    r_y = Xt[1, :] - Xo[1, :]
-    # print(r_y)
-
-    r_diff_sq = np.square(r_x) + np.square(r_y)
-    range_true = sqrt(r_diff_sq)  # c^2 = a^2 + b^2, c = sqrt(a^2 + b^2)
-
-    print("array range_true")
-    print(range_true)
-
-    range_noise = np.random.rand(1, N)
-    print("generate noise")
-    # print(range_noise)
-    range_noise = range_noise * sigma_r
-    # print(range_noise)
-    # print("hold")
-    Z = range_true + range_noise  # add noise to true ranges
-    # Z = range_true
-
-    print("generate Z")
-    # print(Z)
-
-    return Z
 
 
 def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
@@ -334,9 +302,6 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
         check = sqrt_P[:, col_ind]
         x_pred_pts[:, j] = xp + np.multiply(sign_val, check)
 
-    # if not np.isreal(x_pred_pts):
-    #     print("break here if not real... got a problem")
-
     # now compute predicted measurement
     zp_val_vect = np.empty(two_nd)
     for j in range(two_nd):
@@ -345,9 +310,8 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
         zp_val_vect[j] = zp_val
 
     zp = np.matmul(zp_val_vect, np.transpose(wts))
-    # npt = np.transpose(wts)
-    # compute Pxz and Pzz
 
+    # compute Pxz and Pzz
     Pxz = np.zeros((nd, 1))
     Pzz = 0
 
@@ -373,7 +337,6 @@ def ckf_ro_onestep(Xthat_curr, P_curr, Xo_curr, Z_curr, sigma_r, T, Q):
     nu = Z_curr - zp
     nu_abs = np.abs(nu)
 
-    # here = np.multiply(G, nu)
     xp = xp.reshape(-1,1)
     xf = xp + np.multiply(G, nu)
     Gt = np.transpose(G)
@@ -416,7 +379,45 @@ def plot_results(Xo, Xt, Xt_hat):
 
     axs.plot(target_x, target_y, linestyle='solid', label='target', c='r')
     axs.plot(ownship_x, ownship_y, linestyle='solid', label='ownship', c='g')
-    axs.plot(track_x,track_y, linestyle='solid', label='Estimated Track (APCKF)', c='b')
+    axs.plot(track_x,track_y, linestyle='dashed', label='Estimated Track (APCKF)', c='b')
+    axs.legend(loc='upper right')
+    axs.axis([-600, 400, -600, 400])
+    axs.set_aspect('equal')
+
+    plt.show()
+
+    return
+
+
+def plot_iter(Xt_hat):
+    # for figure
+    fig, axs = plt.subplots(1, constrained_layout=True)
+    fig.canvas.set_window_title('Holthouse')
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+    mng.window.activateWindow()
+    mng.window.raise_()
+    title_str = "Homing - acpkf"
+    fig.suptitle(title_str, fontsize="12")
+
+    # #  Plot Target track
+    # print(Xt.shape)
+    # target_x = Xt[0, :]
+    # target_y = Xt[1, :]
+    #
+    # #  Plot ownship track
+    # print(Xo.shape)
+    # ownship_x = Xo[0, :]
+    # ownship_y = Xo[1, :]
+
+    # # plot acpkf estimates
+    print(Xt_hat.shape)
+    track_x = Xt_hat[0,:]
+    track_y = Xt_hat[1,:]
+
+    # axs.plot(target_x, target_y, linestyle='solid', label='target', c='r')
+    # axs.plot(ownship_x, ownship_y, linestyle='solid', label='ownship', c='g')
+    axs.plot(track_x,track_y, linestyle='dashed', label='Estimated Track (APCKF)', c='b')
     axs.legend(loc='upper right')
     axs.axis([-400, 200, -400, 200])
     axs.set_aspect('equal')
@@ -424,7 +425,6 @@ def plot_results(Xo, Xt, Xt_hat):
     plt.show()
 
     return
-
 
 def crlb_range_only(Xt, Xo, sig_b, sig_r, sig_vel, T):
     return crlb

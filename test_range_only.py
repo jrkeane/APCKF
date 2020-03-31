@@ -50,12 +50,7 @@ t_max = 620  # Duration of scenario in seconds
 # N = round(t_max/T)  # Total number of measurements
 Xo, Xt = rof.load_ro_scen_data() # load simulation data
 N = Xo.shape[1]
-# print(N)
-# Xo[:,:-1] = []  # why is this here.. not sure its necessary with python, definitely not pythonistic
-# print(Xo.shape)
-# t = range(N)
-# print(t)
-sigma_r = 0.10  # standard deviation of range measurements (in meters)
+sigma_r = 30  # standard deviation of range measurements (in meters)
 vmax = 3  # Maximum speed of assumed target in m/s
 vel_std = vmax/sqrt(3)  # This is the assumed standard deviation of target speed in m/s
 
@@ -86,7 +81,7 @@ for j in range(MC):
     print("")
     Xt_hat = rof.apckf(Xo,Z,theta_min,theta_max,sigma_r,T,N,vel_std,num_trk,q_tild)
 
-    rof.plot_results(Xt, Xo, Xt_hat)
+    rof.plot_results(Xo, Xt, Xt_hat)
 
     # # calc rms position error
     # Xterr = Xthat - Xt
